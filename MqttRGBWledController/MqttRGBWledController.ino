@@ -34,36 +34,42 @@
 #define MQTT_PORT 1883
 
 // topics
-static char topic_rgb[30] = "/";
-static char topic_wht[30] = "/";
-static char topic_rgb_fb[30] = "/";
-static char topic_wht_fb[30] = "/";
+char topic_rgb[30] = "/";
+char topic_wht[30] = "/";
+char topic_rgb_fb[30] = "/";
+char topic_wht_fb[30] = "/";
 
 // channel values
-static uint8_t red   = 0x00;
-static uint8_t green = 0x00;
-static uint8_t blue  = 0x00;
-static uint8_t white = 0x00;
-static uint8_t red_old   = 0x00;
-static uint8_t green_old = 0x00;
-static uint8_t blue_old  = 0x00;
-static uint8_t white_old = 0x00;
-static char rgb_str[7];
-static char wht_str[4];
+uint8_t red   = 0x00;
+uint8_t green = 0x00;
+uint8_t blue  = 0x00;
+uint8_t white = 0x00;
+uint8_t red_old   = 0x00;
+uint8_t green_old = 0x00;
+uint8_t blue_old  = 0x00;
+uint8_t white_old = 0x00;
+char rgb_str[7];
+char wht_str[4];
 
 // mqtt
 IPAddress mqtt_server;
 AsyncMqttClient mqttClient;
 Ticker mqttReconnectTimer;
+
+char mqtt_ip_pre[MQTT_IP_LENGTH] = "";
+char mqtt_user_pre[MQTT_USER_LENGTH] = "";
+char mqtt_password_pre[MQTT_PASSWORD_LENGTH] = "";
+
 char mqtt_ip[MQTT_IP_LENGTH] = "";
 char mqtt_user[MQTT_USER_LENGTH] = "";
 char mqtt_password[MQTT_PASSWORD_LENGTH] = "";
 
 // wifi
+WiFiManager wifiManager;
 WiFiEventHandler wifiConnectHandler;
 WiFiEventHandler wifiDisconnectHandler;
 Ticker wifiReconnectTimer;
-static char mac_str[13];
+char mac_str[13];
 
 String readEEPROM(int offset, int len)
 {
@@ -221,8 +227,6 @@ void setup(void)
   // init EEPROM
   EEPROM.begin(128);
 
-  WiFiManager wifiManager;
-
   // init button
   pinMode(BUTTON_GPIO, INPUT);
 
@@ -236,13 +240,13 @@ void setup(void)
   }
   
   // init WIFI
-  readEEPROM(MQTT_IP_OFFSET, MQTT_IP_LENGTH).toCharArray(mqtt_ip, MQTT_IP_LENGTH);
-  readEEPROM(MQTT_USER_OFFSET, MQTT_USER_LENGTH).toCharArray(mqtt_user, MQTT_USER_LENGTH);
-  readEEPROM(MQTT_PASSWORD_OFFSET, MQTT_PASSWORD_LENGTH).toCharArray(mqtt_password, MQTT_PASSWORD_LENGTH);
+  readEEPROM(MQTT_IP_OFFSET, MQTT_IP_LENGTH).toCharArray(mqtt_ip_pre, MQTT_IP_LENGTH);
+  readEEPROM(MQTT_USER_OFFSET, MQTT_USER_LENGTH).toCharArray(mqtt_user_pre, MQTT_USER_LENGTH);
+  readEEPROM(MQTT_PASSWORD_OFFSET, MQTT_PASSWORD_LENGTH).toCharArray(mqtt_password_pre, MQTT_PASSWORD_LENGTH);
   
-  WiFiManagerParameter custom_mqtt_ip("ip", "MQTT ip", mqtt_ip, MQTT_IP_LENGTH);
-  WiFiManagerParameter custom_mqtt_user("user", "MQTT user", mqtt_user, MQTT_USER_LENGTH);
-  WiFiManagerParameter custom_mqtt_password("passord", "MQTT password", mqtt_password, MQTT_PASSWORD_LENGTH, "type=\"password\"");
+  WiFiManagerParameter custom_mqtt_ip("ip", "MQTT ip", mqtt_ip_pre, MQTT_IP_LENGTH);
+  WiFiManagerParameter custom_mqtt_user("user", "MQTT user", mqtt_user_pre, MQTT_USER_LENGTH);
+  WiFiManagerParameter custom_mqtt_password("passord", "MQTT password", mqtt_password_pre, MQTT_PASSWORD_LENGTH, "type=\"password\"");
   
   wifiManager.addParameter(&custom_mqtt_ip);
   wifiManager.addParameter(&custom_mqtt_user);
@@ -262,12 +266,18 @@ void setup(void)
   strcpy(mqtt_ip, custom_mqtt_ip.getValue());
   strcpy(mqtt_user, custom_mqtt_user.getValue());
   strcpy(mqtt_password, custom_mqtt_password.getValue());
-  
-  writeEEPROM(MQTT_IP_OFFSET, MQTT_IP_LENGTH, mqtt_ip);
-  writeEEPROM(MQTT_USER_OFFSET, MQTT_USER_LENGTH, mqtt_user);
-  writeEEPROM(MQTT_PASSWORD_OFFSET, MQTT_PASSWORD_LENGTH, mqtt_password);
-  
-  EEPROM.commit();
+
+  if ((0 != strcmp(mqtt_ip, mqtt_ip_pre)) || 
+      (0 != strcmp(mqtt_user, mqtt_user_pre)) || 
+      (0 != strcmp(mqtt_password, mqtt_password_pre)))
+  {
+    Serial.println("Parameters changed, need to update EEPROM.");
+    writeEEPROM(MQTT_IP_OFFSET, MQTT_IP_LENGTH, mqtt_ip);
+    writeEEPROM(MQTT_USER_OFFSET, MQTT_USER_LENGTH, mqtt_user);
+    writeEEPROM(MQTT_PASSWORD_OFFSET, MQTT_PASSWORD_LENGTH, mqtt_password);
+    
+    EEPROM.commit();
+  }
 
   wifiConnectHandler = WiFi.onStationModeGotIP(onWifiConnect);
   wifiDisconnectHandler = WiFi.onStationModeDisconnected(onWifiDisconnect);
